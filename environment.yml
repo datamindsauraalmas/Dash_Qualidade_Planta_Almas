@@ -1,0 +1,53 @@
+﻿name: dash_almas_qualidade
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # ---- Núcleo base ----
+  - python=3.12
+  - numpy
+  - pandas
+  - matplotlib
+  - seaborn
+  - xarray
+  - pyarrow
+  - openpyxl
+  - xlsxwriter
+  - requests
+  - tqdm
+  - python-dotenv
+  - tk
+  - pip
+  - plotly
+  - python-kaleido
+  - streamlit
+  - supabase
+  - pyodbc
+
+  # ---- Stack Jupyter ----
+  - jupyter
+  - jupyterlab
+  - notebook
+  - ipykernel
+  - ipywidgets
+  - jupyterlab_widgets
+  - jupytext
+  - nbconvert
+  - nbformat
+  - nodejs
+
+  # ---- Extensões e produtividade ----
+  - jupyter_contrib_nbextensions
+  - jupyterlab-git
+  - black
+  - voila
+
+  # ---- Conectores de banco de dados ----
+  - sqlalchemy
+  - psycopg2
+  - pyodbc
+
+  # ---- Pacotes via pip ----
+  - pip:
+      - jupyterlab-code-formatter

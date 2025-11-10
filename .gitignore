@@ -1,0 +1,72 @@
+# ==========================================================
+# ⚙️ CONFIGURAÇÃO GERAL DE IGNORO - OTIMIZAR_MOAGEM
+# ==========================================================
+
+# ===========================
+# 🌲 IGNORAR SUBPASTAS INTERNAS
+# ===========================
+
+# Mas mantém scripts e notebooks principais
+!export/*.py
+!export/*.ipynb
+!pages/*.py
+!pages/*.ipynb
+!utils/*.py
+!utils/*.ipynb
+
+# ===========================
+# 🧹 ARQUIVOS TEMPORÁRIOS E CACHE
+# ===========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.bak
+*.swp
+.ipynb_checkpoints/
+
+# ===========================
+# 🖼️ ARQUIVOS DE SAÍDA E GRÁFICOS
+# ===========================
+# Ignorar gráficos e figuras geradas automaticamente
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.gif
+*.pdf
+*.tiff
+*.bmp
+*.parquet
+
+# ===========================
+# ⚙️ CONFIGURAÇÕES LOCAIS
+# ===========================
+.env
+.env.*
+.vscode/
+*.code-workspace
+.venv/
+venv/
+env/
+*.conda
+*.yaml
+
+# ===========================
+# 💻 SISTEMAS OPERACIONAIS
+# ===========================
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
+desktop.ini
+# Linux
+*~
+
+# ===========================
+# 📦 OUTROS
+# ===========================
+*.bak.py
+*.bak.ipynb
