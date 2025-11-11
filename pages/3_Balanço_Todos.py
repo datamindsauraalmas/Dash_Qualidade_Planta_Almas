@@ -1,0 +1,191 @@
+import streamlit as st
+import os
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from supabase import create_client, Client
+from streamlit_autorefresh import st_autorefresh
+from zoneinfo import ZoneInfo  # TZ correto para SP
+
+# === Configurações iniciais ===
+st.set_page_config(layout="wide", page_title="Médias Móveis - Sólidas", page_icon="🧪")
+st.title("🧪 Visualizador de Séries Temporais - Sólidas")
+
+# 15 minutos = 900.000 ms
+st_autorefresh(interval=15 * 60 * 1000, key="auto_refresh_15min")
+
+# Sidebar: recarregar manual
+if st.sidebar.button("🔁 Recarregar Dados"):
+    st.cache_data.clear()
+    st.session_state.hash_parquet = None
+    st.toast("📦 Dados recarregados manualmente!")
+
+# === Supabase & TZ ===
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+TZ_SP = ZoneInfo("America/Sao_Paulo")
+
+# === Loader com paginação e normalização de TZ ===
+@st.cache_data(show_spinner=True, ttl=900)
+def ler_dados_supabase(tabela: str, pagina_tamanho: int = 1000) -> pd.DataFrame:
+    offset = 0
+    dados_completos = []
+    while True:
+        resposta = (
+            supabase
+            .table(tabela)
+            .select("*")
+            .range(offset, offset + pagina_tamanho - 1)
+            .execute()
+        )
+        dados = resposta.data
+        if not dados:
+            break
+        dados_completos.extend(dados)
+        offset += pagina_tamanho
+
+    df = pd.DataFrame(dados_completos)
+
+    # Normaliza DataHoraReal: ISO8601 -> tz-aware UTC -> TZ São Paulo -> tz-naive
+    if "DataHoraReal" in df.columns and not df.empty:
+        df["DataHoraReal"] = (
+            pd.to_datetime(df["DataHoraReal"], utc=True, errors="coerce")
+              .dt.tz_convert(TZ_SP)
+              .dt.tz_localize(None)
+        )
+    return df
+
+# === Carrega dados e aplica filtro fixo para as fontes da página 3 ===
+df = ler_dados_supabase("resultados_analiticos")
+fontes_s = [
+    "BAR_Au_L", "LIX_Au_L", "TQ01_Au_L", "TQ02_Au_L", "TQ06_Au_L", "TQ07_Au_L", "REJ_Au_L",
+    "LIX_Au_S", "TQ2_Au_S", "TQ6_Au_S", "REJ_Au_S"
+]
+df = df[df["Fonte"].isin(fontes_s)]
+
+if df.empty:
+    st.warning("Nenhum dado disponível para estas fontes.")
+    st.stop()
+
+# Ordenação temporal antes de cálculos
+df = df.sort_values(["Fonte", "DataHoraReal"], kind="stable")
+
+# === Datas padrão (independentes do intervalo dos dados) ===
+hoje_sp = datetime.now(TZ_SP).date()
+inicio_padrao = (datetime.now(TZ_SP) - timedelta(days=30)).date()
+
+# === Sidebar ===
+st.sidebar.header("Configurações")
+
+# RESET: limpar chaves antes do widget e fazer rerun
+if st.sidebar.button("🔄 Resetar Filtros"):
+    for k in ["fontes_pag3", "periodo_pag3_v1", "periodo_movel_pag3", "grafico_unico_pag3"]:
+        st.session_state.pop(k, None)
+    st.experimental_rerun()
+
+# Fontes disponíveis e multiselect
+fontes_disponiveis = sorted(df["Fonte"].unique())
+fontes_default = [f for f in st.session_state.get("fontes_pag3", fontes_s) if f in fontes_disponiveis]
+fontes_sel = st.sidebar.multiselect(
+    "Fontes:", fontes_disponiveis, default=fontes_default, key="fontes_pag3"
+)
+
+# Seletor de período: SEM min/max; default = [hoje-30d, hoje]; key nova
+periodo_default = st.session_state.get("periodo_pag3_v1", [inicio_padrao, hoje_sp])
+if not (isinstance(periodo_default, (list, tuple)) and len(periodo_default) == 2):
+    periodo_default = [inicio_padrao, hoje_sp]
+
+periodo = st.sidebar.date_input(
+    "Período:",
+    value=periodo_default,
+    key="periodo_pag3_v1"
+)
+# Não escrever em st.session_state["periodo_pag3_v1"] depois do widget existir.
+
+# Normaliza retorno do widget (pode vir data única)
+if isinstance(periodo, (list, tuple)) and len(periodo) == 2:
+    inicio, fim = periodo
+else:
+    inicio = fim = periodo
+
+# Controles restantes
+periodo_movel_val = st.session_state.get("periodo_movel_pag3", 6)
+periodo_movel = st.sidebar.slider(
+    "Média Móvel (períodos):", 1, 20, value=periodo_movel_val, key="periodo_movel_pag3"
+)
+grafico_unico_val = st.session_state.get("grafico_unico_pag3", True)
+grafico_unico = st.sidebar.checkbox(
+    "Exibir em gráfico único", value=grafico_unico_val, key="grafico_unico_pag3"
+)
+
+# === Filtra dados pelo período/seleção ===
+df_filtrado = df[
+    (df["Fonte"].isin(fontes_sel)) &
+    (df["DataHoraReal"].dt.date >= inicio) &
+    (df["DataHoraReal"].dt.date <= fim)
+].copy()
+
+if df_filtrado.empty:
+    st.warning("Nenhum dado encontrado para o período ou fontes selecionadas.")
+    st.stop()
+
+# === Calcula média móvel (respeitando ordem temporal) ===
+df_filtrado = df_filtrado.sort_values(["Fonte", "DataHoraReal"], kind="stable")
+df_filtrado["MediaMovel"] = (
+    df_filtrado
+    .groupby("Fonte", group_keys=False)
+    .apply(lambda g: g.assign(
+        MediaMovel=g["Valor"].rolling(window=st.session_state["periodo_movel_pag3"], min_periods=1).mean()
+    ))
+)["MediaMovel"]
+
+# === Ordem lógica dos gráficos ===
+ordem_manual = fontes_s
+fontes_sel = sorted(fontes_sel, key=lambda f: ordem_manual.index(f) if f in ordem_manual else len(ordem_manual))
+
+# === Exibição ===
+if st.session_state["grafico_unico_pag3"]:
+    fig = go.Figure()
+    for fonte in fontes_sel:
+        dados_fonte = df_filtrado[df_filtrado["Fonte"] == fonte]
+        fig.add_trace(go.Scatter(
+            x=dados_fonte["DataHoraReal"],
+            y=dados_fonte["MediaMovel"],
+            mode="lines",
+            name=fonte
+        ))
+    fig.update_layout(
+        title=f"Médias Móveis - {st.session_state['periodo_movel_pag3']} períodos",
+        xaxis_title="Data",
+        yaxis_title="Valor",
+        height=600
+    )
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    for fonte in fontes_sel:
+        dados_fonte = df_filtrado[df_filtrado["Fonte"] == fonte]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=dados_fonte["DataHoraReal"],
+            y=dados_fonte["Valor"],
+            mode="markers",
+            name="Bruto",
+            marker=dict(size=4, color="lightgray")
+        ))
+        fig.add_trace(go.Scatter(
+            x=dados_fonte["DataHoraReal"],
+            y=dados_fonte["MediaMovel"],
+            mode="lines",
+            name="Média Móvel"
+        ))
+        fig.update_layout(
+            title=fonte,
+            xaxis_title="Data",
+            yaxis_title="Valor",
+            height=500
+        )
+        st.subheader(fonte)
+        st.plotly_chart(fig, use_container_width=True)

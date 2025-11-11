@@ -1,11 +1,19 @@
 import streamlit as st
+import os
 import pandas as pd
 import plotly.graph_objects as go
-from utils.utils import carregar_dados, get_remote_hash, URL_PARQUET
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from supabase import create_client, Client
+from streamlit_autorefresh import st_autorefresh
+from zoneinfo import ZoneInfo  # TZ São Paulo
 
 # === Configurações iniciais ===
 st.set_page_config(layout="wide", page_title="Médias Móveis - Líquidos", page_icon="💧")
 st.title("💧 Visualizador de Séries Temporais - Líquidos")
+
+# 15 minutos = 900.000 ms
+st_autorefresh(interval=15 * 60 * 1000, key="auto_refresh_15min")
 
 # Sidebar: recarregar manual
 if st.sidebar.button("🔁 Recarregar Dados"):
@@ -13,17 +21,45 @@ if st.sidebar.button("🔁 Recarregar Dados"):
     st.session_state.hash_parquet = None
     st.toast("📦 Dados recarregados manualmente!")
 
-# === Desabilitado: verificação de hash temporariamente ===
-# novo_hash = get_remote_hash(URL_PARQUET)
-# hash_antigo = st.session_state.get("hash_parquet")
-# if novo_hash and novo_hash != hash_antigo:
-#     st.cache_data.clear()
-#     st.session_state.hash_parquet = novo_hash
-#     st.toast("🆕 Novo conteúdo detectado!")
+# === Supabase & TZ ===
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+TZ_SP = ZoneInfo("America/Sao_Paulo")
 
+# === Loader com paginação e normalização de TZ ===
+@st.cache_data(show_spinner=True, ttl=900)
+def ler_dados_supabase(tabela: str, pagina_tamanho: int = 1000) -> pd.DataFrame:
+    offset = 0
+    dados_completos = []
+    while True:
+        resposta = (
+            supabase
+            .table(tabela)
+            .select("*")
+            .range(offset, offset + pagina_tamanho - 1)
+            .execute()
+        )
+        dados = resposta.data
+        if not dados:
+            break
+        dados_completos.extend(dados)
+        offset += pagina_tamanho
 
-# === Dados e filtro fixo ===
-df = carregar_dados()
+    df = pd.DataFrame(dados_completos)
+
+    # Normalização DataHoraReal: ISO8601 -> tz-aware UTC -> TZ São Paulo -> tz-naive
+    if "DataHoraReal" in df.columns and not df.empty:
+        df["DataHoraReal"] = (
+            pd.to_datetime(df["DataHoraReal"], utc=True, errors="coerce")
+              .dt.tz_convert(TZ_SP)
+              .dt.tz_localize(None)  # horário local já aplicado
+        )
+    return df
+
+# === Dados e filtro fixo (Líquidos) ===
+df = ler_dados_supabase("resultados_analiticos")
 fontes_l = ["BAR_Au_L", "LIX_Au_L", "TQ01_Au_L", "TQ02_Au_L", "TQ06_Au_L", "TQ07_Au_L", "REJ_Au_L"]
 df = df[df["Fonte"].isin(fontes_l)]
 
@@ -31,39 +67,62 @@ if df.empty:
     st.warning("Nenhum dado disponível para as fontes líquidas.")
     st.stop()
 
-# === Datas ===
+# Ordenação temporal antes de cálculos
+df = df.sort_values(["Fonte", "DataHoraReal"], kind="stable")
+
+# Datas de referência (somente para legenda/diagnóstico)
 data_max = df["DataHoraReal"].max()
 data_min_total = df["DataHoraReal"].min()
-data_min_default = data_max - pd.Timedelta(days=30)
-
-# === Estado Inicial ===
-st.session_state.setdefault("periodo", [data_min_default.date(), data_max.date()])
-st.session_state.setdefault("periodo_movel", 6)
-st.session_state.setdefault("grafico_unico", True)
 
 # === Sidebar ===
 st.sidebar.header("Configurações")
-if st.sidebar.button("🔄 Resetar Filtros"):
-    st.session_state["periodo"] = [data_min_default.date(), data_max.date()]
-    st.session_state["periodo_movel"] = 6
-    st.session_state["grafico_unico"] = True
 
-# Multiselect com todos os líquidos já selecionados
+# RESET: limpar chaves antes do widget e fazer rerun
+if st.sidebar.button("🔄 Resetar Filtros"):
+    for k in ["fontes_liq", "periodo_liq_v1", "periodo_movel_liq", "grafico_unico_liq"]:
+        st.session_state.pop(k, None)
+    st.experimental_rerun()
+
+# Fontes disponíveis e multiselect
 fontes_disponiveis = sorted(df["Fonte"].unique())
-fontes_sel = st.sidebar.multiselect("Fontes:", fontes_disponiveis, default=fontes_disponiveis, key="fontes")
+fontes_default = [f for f in st.session_state.get("fontes_liq", fontes_l) if f in fontes_disponiveis]
+fontes_sel = st.sidebar.multiselect(
+    "Fontes:", fontes_disponiveis, default=fontes_default, key="fontes_liq"
+)
+
+# Seletor de período: SEM min/max; default = [hoje-30d, hoje] no fuso SP
+hoje_sp = datetime.now(TZ_SP).date()
+inicio_padrao = (datetime.now(TZ_SP) - timedelta(days=30)).date()
+
+periodo_default = st.session_state.get("periodo_liq_v1", [inicio_padrao, hoje_sp])
+if not (isinstance(periodo_default, (list, tuple)) and len(periodo_default) == 2):
+    periodo_default = [inicio_padrao, hoje_sp]
 
 periodo = st.sidebar.date_input(
     "Período:",
-    value=st.session_state["periodo"],
-    min_value=data_min_total.date(),
-    max_value=data_max.date(),
-    key="periodo"
+    value=periodo_default,
+    key="periodo_liq_v1"
 )
-periodo_movel = st.sidebar.slider("Média Móvel (períodos):", 1, 20, value=st.session_state["periodo_movel"], key="periodo_movel")
-grafico_unico = st.sidebar.checkbox("Exibir em gráfico único", value=st.session_state["grafico_unico"], key="grafico_unico")
+# Não escrever em st.session_state["periodo_liq_v1"] depois do widget existir.
 
-inicio, fim = periodo if isinstance(periodo, (list, tuple)) and len(periodo) == 2 else (periodo, data_max.date())
-st.sidebar.caption(f"Intervalo disponível: {data_min_total.date()} a {data_max.date()}")
+# Normaliza retorno (pode vir data única)
+if isinstance(periodo, (list, tuple)) and len(periodo) == 2:
+    inicio, fim = periodo
+else:
+    inicio = fim = periodo
+
+# Controles restantes (podem usar value= com keys próprias)
+periodo_movel_val = st.session_state.get("periodo_movel_liq", 6)
+periodo_movel = st.sidebar.slider(
+    "Média Móvel (períodos):", 1, 20, value=periodo_movel_val, key="periodo_movel_liq"
+)
+grafico_unico_val = st.session_state.get("grafico_unico_liq", True)
+grafico_unico = st.sidebar.checkbox(
+    "Exibir em gráfico único", value=grafico_unico_val, key="grafico_unico_liq"
+)
+
+# Legenda de faixa disponível nos dados (informativa)
+st.sidebar.caption(f"Intervalo nos dados: {data_min_total.date()} a {data_max.date()}")
 
 # === Filtragem final ===
 df_filtrado = df[
@@ -76,16 +135,22 @@ if df_filtrado.empty:
     st.warning("Nenhum dado encontrado.")
     st.stop()
 
-df_filtrado["MediaMovel"] = df_filtrado.groupby("Fonte")["Valor"].transform(
-    lambda x: x.rolling(window=periodo_movel, min_periods=1).mean()
-)
+# Média móvel respeitando a ordem temporal dentro do grupo
+df_filtrado = df_filtrado.sort_values(["Fonte", "DataHoraReal"], kind="stable")
+df_filtrado["MediaMovel"] = (
+    df_filtrado
+    .groupby("Fonte", group_keys=False)
+    .apply(lambda g: g.assign(
+        MediaMovel=g["Valor"].rolling(window=st.session_state["periodo_movel_liq"], min_periods=1).mean()
+    ))
+)["MediaMovel"]
 
-# === Ordem lógica dos gráficos ===
+# Ordem lógica dos gráficos
 ordem_manual = fontes_l
 fontes_sel = sorted(fontes_sel, key=lambda f: ordem_manual.index(f) if f in ordem_manual else len(ordem_manual))
 
-# === Exibição ===
-if grafico_unico:
+# Exibição
+if st.session_state["grafico_unico_liq"]:
     fig = go.Figure()
     for fonte in fontes_sel:
         dados_fonte = df_filtrado[df_filtrado["Fonte"] == fonte]
@@ -96,7 +161,7 @@ if grafico_unico:
             name=fonte
         ))
     fig.update_layout(
-        title=f"Médias Móveis - {periodo_movel} períodos",
+        title=f"Médias Móveis - {st.session_state['periodo_movel_liq']} períodos",
         xaxis_title="Data",
         yaxis_title="Valor",
         height=600

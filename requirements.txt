@@ -1,0 +1,15 @@
+# === Núcleo do projeto ===
+streamlit==1.33.0
+streamlit-autorefresh==1.0.1
+pandas==2.3.3
+numpy==1.26.4
+plotly==5.24.1
+openpyxl==3.1.5
+
+# === Utilitários ===
+python-dotenv==1.2.1
+requests==2.32.3
+tzdata
+
+# === Supabase ===
+supabase==2.24.0
