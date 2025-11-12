@@ -27,6 +27,7 @@ __pycache__/
 *.swp
 .ipynb_checkpoints/
 *.xlsx
+logs
 
 # ===========================
 # 🖼️ ARQUIVOS DE SAÍDA E GRÁFICOS

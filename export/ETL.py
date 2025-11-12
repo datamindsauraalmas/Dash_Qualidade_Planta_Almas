@@ -17,7 +17,7 @@ if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
 # Adiciona pasta raiz ao sys.path
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # %%
 # =========================
@@ -142,7 +142,7 @@ def baixar_excel_para_bytesio(fonte_excel):
     Retorna um objeto BytesIO ou o próprio caminho (ambos são aceitos por read_excel).
     """
     if isinstance(fonte_excel, str) and fonte_excel.lower().startswith(("http://", "https://")):
-        print("📥 Baixando arquivo do SharePoint/URL...")
+        print("Baixando arquivo do SharePoint/URL...")
         resp = requests.get(fonte_excel)
         if resp.status_code != 200:
             raise RuntimeError(f"Erro ao baixar o arquivo (status {resp.status_code}).")
@@ -196,7 +196,7 @@ def gerar_consolidados(fonte_excel):
     ]
 
     todos_dados = []
-    print("🔄 Processando dados (séries)...")
+    print("Processando dados (séries)...")
     for aba, colunas, val_max, nome, horas in conjuntos:
         dados = carregar_dados(excel_data, aba, colunas, horas)
         df = processar_dados(dados, val_max, nome)
@@ -207,9 +207,9 @@ def gerar_consolidados(fonte_excel):
         columns=["Fonte", "DataHoraReal", "Valor", "MediaMovel_6"]
     )
     df_final = df_final.sort_values(by="DataHoraReal", ascending=False).reset_index(drop=True)
-    print(f"✅ Séries consolidadas: {len(df_final)} linhas")
+    print(f"Séries consolidadas: {len(df_final)} linhas")
     df_final.to_parquet("consolidado.parquet", index=False)
-    print("📁 Arquivo salvo: consolidado.parquet")
+    print("Arquivo salvo: consolidado.parquet")
 
     # ----- Conjuntos de batelada (iguais ao original) -----
     conjuntos_batelada = [
@@ -228,11 +228,11 @@ def gerar_consolidados(fonte_excel):
     ]
 
     todos_batelada = []
-    print("🔄 Processando dados de batelada...")
+    print("Processando dados de batelada...")
     for aba, colunas, val_max, nome in conjuntos_batelada:
         dados_b = carregar_dados_batelada(excel_data, aba, colunas)
         df_b = processar_dados_batelada(dados_b, val_max, nome)
-        print(f"📥 {nome}: {len(df_b)} linhas processadas")
+        print(f"{nome}: {len(df_b)} linhas processadas")
         if not df_b.empty:
             todos_batelada.append(df_b)
 
@@ -249,7 +249,7 @@ def gerar_consolidados(fonte_excel):
         df_final_batelada["Batelada"] = df_final_batelada["Batelada"].astype("int64")
 
     df_final_batelada.to_parquet("consolidado_batelada.parquet", index=False, engine="pyarrow", compression="snappy")
-    print("📁 Arquivo salvo: consolidado_batelada.parquet")
+    print("Arquivo salvo: consolidado_batelada.parquet")
 
     return df_final, df_final_batelada
 
@@ -260,7 +260,7 @@ if __name__ == "__main__":
     URL_EXCEL = r"C:\Users\Dataminds\Aura Minerals\Almas - Performance - Data Minds - Data Minds\01 - Planta\Projeto - Dash_Qualidade\almasdash\data\Resultados Planta.xlsx"
 
     df_final, df_final_batelada = gerar_consolidados(URL_EXCEL)
-    print("✅ Pronto: Parquets locais gerados sem hash e sem upload.")
+    print("Pronto: Parquets locais gerados sem hash e sem upload.")
 
 # %%
 df_final

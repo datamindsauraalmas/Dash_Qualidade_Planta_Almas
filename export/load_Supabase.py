@@ -15,7 +15,7 @@ if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
 # Adiciona pasta raiz ao sys.path
-#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # %%
 # Carrega as variáveis de ambiente definidas no arquivo .env, sobrescrevendo valores já existentes no ambiente
