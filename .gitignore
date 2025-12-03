@@ -56,6 +56,8 @@ venv/
 env/
 *.conda
 *.yaml
+*.toml
+etl.egg-info/
 
 # ===========================
 # 💻 SISTEMAS OPERACIONAIS

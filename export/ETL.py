@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[18]:
+# In[1]:
 
 
 # gerar_consolidados_sem_hash_e_sem_upload.py
@@ -11,23 +11,11 @@ import os
 import sys
 from io import BytesIO
 
-
-# In[19]:
-
-
-# Modulo especifico para rodar o notebook fora da raiz do projeto
-# Garante que a raiz do projeto (onde está a pasta utils/) entre no sys.path
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) \
-    if "__file__" in globals() else os.path.abspath("..")
-
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
-
-# Adiciona pasta raiz ao sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Carregamento de variaveis de ambientes e funções 
+from utils.config import *
 
 
-# In[20]:
+# In[2]:
 
 
 # =========================
@@ -274,7 +262,7 @@ def gerar_consolidados(
     return df_final, df_final_batelada
 
 
-# In[21]:
+# In[3]:
 
 
 # ----- Configurações de horários -----
@@ -342,7 +330,7 @@ CONJUNTOS_BATELADA_DEFAULT = [
 ]
 
 
-# In[ ]:
+# In[4]:
 
 
 # Caminho do arquivo de excel
@@ -351,7 +339,7 @@ URL_EXCEL = r"C:\Users\Dataminds2\Aura Minerals\Almas - Performance - Data Minds
 # Execução principal
 df_amostras, df_batelada = gerar_consolidados(
     fonte_excel=URL_EXCEL,
-    caminho_series="../export/amostras_horarias.parquet",
-    caminho_batelada="../export/amostras_bateladas.parquet"
+    caminho_series=PARQUET_AMOSTRAS_HORARIAS,
+    caminho_batelada=PARQUET_AMOSTRAS_BATELADAS
 )
 

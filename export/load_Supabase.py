@@ -14,21 +14,6 @@ from dotenv import load_dotenv
 # In[2]:
 
 
-# Modulo especifico para rodar o notebook fora da raiz do projeto
-# Garante que a raiz do projeto (onde está a pasta utils/) entre no sys.path
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) \
-    if "__file__" in globals() else os.path.abspath("..")
-
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
-
-# Adiciona pasta raiz ao sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
-# In[3]:
-
-
 # Carrega as variáveis de ambiente definidas no arquivo .env, sobrescrevendo valores já existentes no ambiente
 load_dotenv(override=True)
 
@@ -40,18 +25,19 @@ SUPABASE_TABELA_RESULTADOS_BATELADAS = os.getenv("SUPABASE_TABELA_RESULTADOS_BAT
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-from utils.funcoes_uteis import ler_parquet, preparar_df, enviar_dados_supabase
+from utils.funcoes_uteis import *
+from utils.config import *
 
 
-# In[4]:
+# In[3]:
 
 
 # Leitura dos arquivos parquet
-df_resultados_analiticos = ler_parquet('../export/amostras_horarias.parquet')
-df_resultados_bateladas = ler_parquet('../export/amostras_bateladas.parquet')
+df_resultados_analiticos = ler_parquet(PARQUET_AMOSTRAS_HORARIAS)
+df_resultados_bateladas = ler_parquet(PARQUET_AMOSTRAS_BATELADAS)
 
 
-# In[5]:
+# In[4]:
 
 
 # Preparar coluna de data com fuso horário
@@ -60,12 +46,6 @@ df_resultados_bateladas= preparar_df(df_resultados_bateladas,['DataHoraReal'])
 
 
 # In[6]:
-
-
-df_resultados_analiticos
-
-
-# In[7]:
 
 
 # Enviar para o supabase

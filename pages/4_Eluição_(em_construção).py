@@ -23,12 +23,38 @@ if st.sidebar.button("🔁 Recarregar Dados"):
     st.toast("📦 Dados recarregados manualmente!")
 
 # === Supabase & TZ ===
+# Carrega o .env da pasta atual
 load_dotenv()
-SUPABASE_URL = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY")
 
-#SUPABASE_URL = os.getenv("SUPABASE_URL")
-#SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+def get_config(key: str, default: str | None = None) -> str | None:
+    """
+    Busca um valor de configuração na seguinte ordem:
+    1) st.secrets (para Streamlit Cloud / secrets.toml)
+    2) Variáveis de ambiente (para uso com .env + python-dotenv)
+    3) default (se nada encontrado)
+    """
+    # 1) Tenta st.secrets, mas sem quebrar se não houver secrets.toml
+    try:
+        if key in st.secrets:
+            return st.secrets[key]
+    except FileNotFoundError:
+        # Nenhum secrets.toml definido → ignora e segue
+        pass
+
+    # 2) Tenta variável de ambiente
+    value = os.getenv(key)
+    if value is not None:
+        return value
+
+    # 3) Fallback
+    return default
+
+SUPABASE_URL = get_config("SUPABASE_URL")
+SUPABASE_KEY = get_config("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error("Configuração de Supabase ausente. Verifique .env (local) ou Secrets (Streamlit Cloud).")
+    st.stop()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 TZ_SP = ZoneInfo("America/Sao_Paulo")
