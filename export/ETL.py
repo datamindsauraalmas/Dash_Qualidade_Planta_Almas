@@ -1,4 +1,9 @@
-# %%
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[18]:
+
+
 # gerar_consolidados_sem_hash_e_sem_upload.py
 import pandas as pd
 import requests
@@ -7,7 +12,9 @@ import sys
 from io import BytesIO
 
 
-# %%
+# In[19]:
+
+
 # Modulo especifico para rodar o notebook fora da raiz do projeto
 # Garante que a raiz do projeto (onde está a pasta utils/) entre no sys.path
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) \
@@ -19,7 +26,10 @@ if ROOT_DIR not in sys.path:
 # Adiciona pasta raiz ao sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# %%
+
+# In[20]:
+
+
 # =========================
 # ====== PARTE 1: Séries (consolidado.parquet)
 # =========================
@@ -150,122 +160,198 @@ def baixar_excel_para_bytesio(fonte_excel):
     # caminho local:
     return fonte_excel
 
-def gerar_consolidados(fonte_excel):
+def gerar_consolidados(
+    fonte_excel,
+    conjuntos_series=None,
+    conjuntos_batelada=None,
+    caminho_series="consolidado.parquet",
+    caminho_batelada="consolidado_batelada.parquet",
+):
     """
     Executa os dois pipelines (séries e batelada) SEM hash e SEM upload.
-    Salva consolidado.parquet e consolidado_batelada.parquet localmente.
+    Salva os arquivos parquet nos caminhos informados.
     Retorna (df_final, df_final_batelada).
+
+    Parâmetros
+    ----------
+    fonte_excel : str ou bytes-like
+        Caminho ou fonte do Excel.
+    conjuntos_series : iterable[tuple]
+        Cada tupla: (aba, colunas, val_max, nome, horas, [filtro])
+    conjuntos_batelada : iterable[tuple]
+        Cada tupla: (aba, colunas, val_max, nome, [filtro])
     """
+
+    if conjuntos_series is None:
+        conjuntos_series = CONJUNTOS_SERIES_DEFAULT
+
+    if conjuntos_batelada is None:
+        conjuntos_batelada = CONJUNTOS_BATELADA_DEFAULT
+
     excel_data = baixar_excel_para_bytesio(fonte_excel)
 
-    # ----- Conjuntos (iguais ao original) -----
-    horarios_3  = ["08:00", "16:00", "24:00"]
-    horarios_4  = ["06:00", "12:00", "18:00", "24:00"]
-    horarios_6  = ["04:00", "08:00", "12:00", "16:00", "20:00", "24:00"]
-    horarios_2  = ["12:00", "24:00"]
-    horarios_12 = ["02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00", "24:00"]
-    horarios_bar = ["04:00", "08:00", "12:00", "16:00", "20:00", "24:00"]
-
-    conjuntos = [
-        # Sólidas
-        ("Sólidas", [0, 30, 35, 40], 50,  "LIX_Au_S", horarios_3),
-        ("Sólidas", [0, 45, 59],     50,  "LIX_Au_S", horarios_2),
-        ("Sólidas", [0, 27, 32, 37, 42], 50,  "LIX_Au_S", horarios_4),
-        ("Sólidas", [0, 47, 49, 51, 53, 55, 57], 50, "LIX_Au_S", horarios_6),
-        ("Sólidas", [0, 31, 36, 41], 200, "LIX_PX",    horarios_3),
-        ("Sólidas", [0, 46, 61],     200, "LIX_PX",    horarios_2),
-        ("Sólidas", [0, 48, 50, 52, 54, 56, 58], 200, "LIX_PX", horarios_6),
-
-        ("Sólidas", [0, 76, 77, 78], 50,  "REJ_Au_S",  horarios_3),
-        ("Sólidas", [0, 72, 74],     50,  "REJ_Au_S",  horarios_2),
-
-        ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 7, 8, 9],  50, "TQ2_Au_S", horarios_3),
-        ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 14, 15, 16], 50, "TQ5_Au_S", horarios_3),
-        ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 21, 22, 23], 50, "TQ6_Au_S", horarios_3),
-
-        ("Carvão TQ Produção", [0, 8], 50, "TQ2_Au_S", ["12:00"]),
-
-        # Líquidas
-        ("Água de Processo", [0, 15, 16, 17, 18, 19, 20], 0.6, "BAR_Au_L",  horarios_bar),
-        ("Líquidas",         [0, 38, 39, 40],            50,   "LIX_Au_L",  horarios_3),
-        ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(7, 31)), 5, "TQ01_Au_L", None),
-        ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0, 32, 33, 34], 1.5, "TQ02_Au_L", horarios_3),
-        ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0, 51, 52, 53], 50,  "TQ06_Au_L", horarios_3),
-        ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(82, 94)), 50, "TQ07_Au_L", horarios_12),
-        ("Líquidas", [0, 101, 102, 103], 0.8, "REJ_Au_L", horarios_3),
-    ]
-
+    # =========================
+    #        SÉRIES
+    # =========================
     todos_dados = []
     print("Processando dados (séries)...")
-    for aba, colunas, val_max, nome, horas in conjuntos:
+
+    for item in conjuntos_series:
+        # Suporta tanto (aba, colunas, val_max, nome, horas)
+        # quanto (aba, colunas, val_max, nome, horas, filtro)
+        if len(item) == 5:
+            aba, colunas, val_max, nome, horas = item
+            filtro = None
+        else:
+            aba, colunas, val_max, nome, horas, filtro = item
+
         dados = carregar_dados(excel_data, aba, colunas, horas)
         df = processar_dados(dados, val_max, nome)
+
         if not df.empty:
+            df["Filtro"] = filtro
             todos_dados.append(df)
 
-    df_final = pd.concat(todos_dados, ignore_index=True) if todos_dados else pd.DataFrame(
-        columns=["Fonte", "DataHoraReal", "Valor", "MediaMovel_6"]
-    )
+    if todos_dados:
+        df_final = pd.concat(todos_dados, ignore_index=True)
+    else:
+        df_final = pd.DataFrame(
+            columns=["Fonte", "DataHoraReal", "Valor", "MediaMovel_6", "Filtro"]
+        )
+
     df_final = df_final.sort_values(by="DataHoraReal", ascending=False).reset_index(drop=True)
     print(f"Séries consolidadas: {len(df_final)} linhas")
-    df_final.to_parquet("consolidado.parquet", index=False)
-    print("Arquivo salvo: consolidado.parquet")
+    df_final.to_parquet(caminho_series, index=False)
+    print(f"Arquivo salvo: {caminho_series}")
 
-    # ----- Conjuntos de batelada (iguais ao original) -----
-    conjuntos_batelada = [
-        ("Cuba Principal",    [1, 4, 3, 5],   500,  "CUBA_Entrada_Au"),
-        ("Cuba Principal",    [1, 4, 3, 6],   500,  "CUBA_Entrada_NaOH"),
-        ("Cuba Principal",    [1, 4, 3, 7],   500,  "CUBA_Entrada_CN"),
-        ("Cuba Principal",    [9, 12, 11, 13], 500, "CUBA_Saida_Au"),
-        ("Cuba Principal",    [9, 12, 11, 51], 500, "CUBA_Saida_NaOH"),
-        ("Cuba Principal",    [9, 12, 11, 52], 500, "CUBA_Saida_CN"),
-        ("Acacia",  [1, 4, 2, 5],  5000,  "ACA_Rica"),
-        ("Acacia",  [1, 4, 2, 11], 5000,  "ACA_Pobre"),
-        ("Acacia",  [1, 4, 2, 7],  5000,  "ACA_CN"),
-        ("Eluição - Carvão", [2, 1, 3, 4],  5000, "ELU_Rica"),
-        ("Eluição - Carvão", [6, 1, 7, 8],  5000, "ELU_Pobre"),
-        ("Eluição - Carvão", [6, 1, 7, 11], 5000, "ELU_ATV"),
-    ]
-
+    # =========================
+    #       BATELADA
+    # =========================
     todos_batelada = []
     print("Processando dados de batelada...")
-    for aba, colunas, val_max, nome in conjuntos_batelada:
+
+    for item in conjuntos_batelada:
+        # Suporta tanto (aba, colunas, val_max, nome)
+        # quanto (aba, colunas, val_max, nome, filtro)
+        if len(item) == 4:
+            aba, colunas, val_max, nome = item
+            filtro = None
+        else:
+            aba, colunas, val_max, nome, filtro = item
+
         dados_b = carregar_dados_batelada(excel_data, aba, colunas)
         df_b = processar_dados_batelada(dados_b, val_max, nome)
         print(f"{nome}: {len(df_b)} linhas processadas")
+
         if not df_b.empty:
+            df_b["Filtro"] = filtro
             todos_batelada.append(df_b)
 
-    df_final_batelada = (
-        pd.concat(todos_batelada, ignore_index=True).drop_duplicates(
-            subset=["Fonte", "DataHoraReal", "Valor", "Batelada"]
-        ).reset_index(drop=True)
-        if todos_batelada else
-        pd.DataFrame(columns=["DataHoraReal", "Valor", "Batelada", "Fonte"])
-    )
+    if todos_batelada:
+        df_final_batelada = (
+            pd.concat(todos_batelada, ignore_index=True)
+            .drop_duplicates(subset=["Fonte", "DataHoraReal", "Valor", "Batelada"])
+            .reset_index(drop=True)
+        )
+    else:
+        df_final_batelada = pd.DataFrame(
+            columns=["DataHoraReal", "Valor", "Batelada", "Fonte", "Filtro"]
+        )
+
     df_final_batelada = df_final_batelada.sort_values(by="DataHoraReal", ascending=False)
     df_final_batelada["Valor"] = pd.to_numeric(df_final_batelada["Valor"], errors="coerce")
     if not df_final_batelada.empty:
         df_final_batelada["Batelada"] = df_final_batelada["Batelada"].astype("int64")
 
-    df_final_batelada.to_parquet("consolidado_batelada.parquet", index=False, engine="pyarrow", compression="snappy")
-    print("Arquivo salvo: consolidado_batelada.parquet")
+    df_final_batelada.to_parquet(
+        caminho_batelada,
+        index=False,
+        engine="pyarrow",
+        compression="snappy",
+    )
+    print(f"Arquivo salvo: {caminho_batelada}")
 
     return df_final, df_final_batelada
 
 
+# In[21]:
 
-# %%
-if __name__ == "__main__":
-    URL_EXCEL = r"C:\Users\Dataminds\Aura Minerals\Almas - Performance - Data Minds - Data Minds\01 - Planta\Projeto - Dash_Qualidade\almasdash\data\Resultados Planta.xlsx"
 
-    df_final, df_final_batelada = gerar_consolidados(URL_EXCEL)
-    print("Pronto: Parquets locais gerados sem hash e sem upload.")
+# ----- Configurações de horários -----
+HORARIOS_3 = ["08:00", "16:00", "24:00"]
+HORARIOS_4 = ["06:00", "12:00", "18:00", "24:00"]
+HORARIOS_6 = ["04:00", "08:00", "12:00", "16:00", "20:00", "24:00"]
+HORARIOS_2 = ["12:00", "24:00"]
+HORARIOS_12 = ["02:00", "04:00", "06:00", "08:00", "10:00", "12:00","14:00", "16:00", "18:00", "20:00", "22:00", "24:00"]
+HORARIOS_24 = ["01:00", "02:00", "03:00", "04:00", "05:00","06:00", "07:00", "08:00", "09:00", "10:00", "11:00","12:00",
+               "13:00", "14:00", "15:00", "16:00", "17:00","18:00", "19:00", "20:00", "21:00", "22:00", "23:00","24:00"
+]
+HORARIOS_BAR = ["04:00", "08:00", "12:00", "16:00", "20:00", "24:00"]
 
-# %%
-df_final
+# ----- Conjuntos padrão de séries -----
+# Estrutura: (aba, colunas, val_max, nome, horas)
+CONJUNTOS_SERIES_DEFAULT = [
+    # Sólidas
+    ("Sólidas", [0, 30, 35, 40], 50,  "LIX_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas", [0, 45, 59],     50,  "LIX_Au_S", HORARIOS_2,"solidas"),
+    ("Sólidas", [0, 27, 32, 37, 42], 50,  "LIX_Au_S", HORARIOS_4,"solidas"),
+    ("Sólidas", [0, 47, 49, 51, 53, 55, 57], 50, "LIX_Au_S", HORARIOS_6,"solidas"),
+    ("Sólidas", [0, 31, 36, 41], 200, "LIX_PX",    HORARIOS_3,"solidas"),
+    ("Sólidas", [0, 46, 61],     200, "LIX_PX",    HORARIOS_2,"solidas"),
+    ("Sólidas", [0, 48, 50, 52, 54, 56, 58], 200, "LIX_PX", HORARIOS_6,"solidas"),
+    ("Sólidas", [0, 76, 77, 78], 50,  "REJ_Au_S",  HORARIOS_3,"solidas"),
+    ("Sólidas", [0, 72, 74],     50,  "REJ_Au_S",  HORARIOS_2,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 7, 8, 9],  50, "TQ2_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 14, 15, 16], 50, "TQ5_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 21, 22, 23], 50, "TQ6_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 28, 29, 30], 50, "TQ9_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 35, 36, 37], 50, "TQ10_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 42, 43, 44], 50, "TQ11_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 49, 50, 51], 50, "TQ12_Au_S", HORARIOS_3,"solidas"),
+    ("Carvão TQ Produção", [0, 8], 50, "TQ2_Au_S", ["12:00"],"solidas"),
 
-# %%
-df_final_batelada
+    # Líquidas
+    ("Água de Processo", [0, 15, 16, 17, 18, 19, 20], 0.6, "BAR_Au_L",  HORARIOS_BAR, "liquidas"),
+    ("Líquidas",         [0, 38, 39, 40],            50,   "LIX_Au_L",  HORARIOS_3, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(7, 31)), 5, "TQ01_Au_L", HORARIOS_24, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0, 32, 33, 34], 1.5, "TQ02_Au_L", HORARIOS_3, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0, 51, 52, 53], 50,  "TQ06_Au_L", HORARIOS_3, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(82, 94)), 50, "TQ07_Au_L", HORARIOS_12, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(111, 123)), 50, "TQ09_Au_L", HORARIOS_12, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(136, 148)), 50, "TQ10_Au_L", HORARIOS_12, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(161, 173)), 50, "TQ11_Au_L", HORARIOS_12, "liquidas"),
+    ("Líquidas Saída TQ1 TQ2 TQ6 TQ7", [0] + list(range(186, 198)), 50, "TQ12_Au_L", HORARIOS_12, "liquidas"),
+    ("Líquidas", [0, 101, 102, 103], 0.8, "REJ_Au_L", HORARIOS_3, "liquidas"),
+]
 
+# ----- Conjuntos padrão de batelada -----
+# Estrutura: (aba, colunas, val_max, nome)
+CONJUNTOS_BATELADA_DEFAULT = [
+    ("Cuba Principal",    [1, 4, 3, 5],   500,  "CUBA_Entrada_Au","eluicao"),
+    ("Cuba Principal",    [1, 4, 3, 6],   500,  "CUBA_Entrada_NaOH","eluicao"),
+    ("Cuba Principal",    [1, 4, 3, 7],   500,  "CUBA_Entrada_CN","eluicao"),
+    ("Cuba Principal",    [9, 12, 11, 13], 500, "CUBA_Saida_Au","eluicao"),
+    ("Cuba Principal",    [9, 12, 11, 51], 500, "CUBA_Saida_NaOH","eluicao"),
+    ("Cuba Principal",    [9, 12, 11, 52], 500, "CUBA_Saida_CN","eluicao"),
+    ("Acacia",  [1, 4, 2, 5],  5000,  "ACA_Rica","acacia"),
+    ("Acacia",  [1, 4, 2, 11], 5000,  "ACA_Pobre","acacia"),
+    ("Acacia",  [1, 4, 2, 7],  5000,  "ACA_CN","acacia"),
+    ("Eluição - Carvão", [2, 1, 3, 4],  5000, "ELU_Rica","eluicao"),
+    ("Eluição - Carvão", [6, 1, 7, 8],  5000, "ELU_Pobre","eluicao"),
+    ("Eluição - Carvão", [6, 1, 7, 11], 5000, "ELU_ATV","eluicao"),
+]
+
+
+# In[ ]:
+
+
+# Caminho do arquivo de excel
+URL_EXCEL = r"C:\Users\Dataminds2\Aura Minerals\Almas - Performance - Data Minds - Data Minds\09 - Automações\Arquivos_Onedrive\Resultados Planta.xlsx"
+
+# Execução principal
+df_amostras, df_batelada = gerar_consolidados(
+    fonte_excel=URL_EXCEL,
+    caminho_series="../export/amostras_horarias.parquet",
+    caminho_batelada="../export/amostras_bateladas.parquet"
+)
 
