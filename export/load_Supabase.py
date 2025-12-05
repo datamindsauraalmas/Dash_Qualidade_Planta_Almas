@@ -45,7 +45,7 @@ df_resultados_analiticos = preparar_df(df_resultados_analiticos,['DataHoraReal']
 df_resultados_bateladas= preparar_df(df_resultados_bateladas,['DataHoraReal'])
 
 
-# In[6]:
+# In[5]:
 
 
 # Enviar para o supabase

@@ -90,7 +90,7 @@ def ler_dados_supabase(tabela: str, pagina_tamanho: int = 1000) -> pd.DataFrame:
 
 # === Carrega dados e aplica filtro fixo para fontes sólidas ===
 df = ler_dados_supabase("resultados_analiticos")
-fontes_s = ["LIX_Au_S", "TQ2_Au_S", "TQ5_Au_S", "TQ6_Au_S", "REJ_Au_S", "TQ9_Au_S", "TQ10_Au_S", "TQ11_Au_S", "TQ12_Au_S"]
+fontes_s = ["LIX_Au_S", "TQ2_Au_S", "TQ5_Au_S", "TQ6_Au_S", "TQ7_Au_S","REJ_Au_S", "TQ9_Au_S", "TQ10_Au_S", "TQ11_Au_S", "TQ12_Au_S"]
 df = df[df["Fonte"].isin(fontes_s)]
 
 if df.empty:

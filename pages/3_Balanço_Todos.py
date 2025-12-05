@@ -92,7 +92,7 @@ def ler_dados_supabase(tabela: str, pagina_tamanho: int = 1000) -> pd.DataFrame:
 df = ler_dados_supabase("resultados_analiticos")
 fontes_s = [
     "BAR_Au_L", "LIX_Au_L", "TQ01_Au_L", "TQ02_Au_L", "TQ06_Au_L", "TQ07_Au_L", "REJ_Au_L", "TQ09_Au_L", "TQ10_Au_L", "TQ11_Au_L", "TQ12_Au_L",
-    "LIX_Au_S", "TQ2_Au_S", "TQ6_Au_S", "REJ_Au_S", "TQ9_Au_S", "TQ10_Au_S", "TQ11_Au_S", "TQ12_Au_S",
+    "LIX_Au_S", "TQ2_Au_S", "TQ6_Au_S", "REJ_Au_S", "TQ9_Au_S", "TQ10_Au_S", "TQ11_Au_S", "TQ12_Au_S", "TQ7_Au_S",
 ]
 df = df[df["Fonte"].isin(fontes_s)]
 

@@ -262,7 +262,7 @@ def gerar_consolidados(
     return df_final, df_final_batelada
 
 
-# In[3]:
+# In[ ]:
 
 
 # ----- Configurações de horários -----
@@ -292,10 +292,11 @@ CONJUNTOS_SERIES_DEFAULT = [
     ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 7, 8, 9],  50, "TQ2_Au_S", HORARIOS_3,"solidas"),
     ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 14, 15, 16], 50, "TQ5_Au_S", HORARIOS_3,"solidas"),
     ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 21, 22, 23], 50, "TQ6_Au_S", HORARIOS_3,"solidas"),
-    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 28, 29, 30], 50, "TQ9_Au_S", HORARIOS_3,"solidas"),
-    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 35, 36, 37], 50, "TQ10_Au_S", HORARIOS_3,"solidas"),
-    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 42, 43, 44], 50, "TQ11_Au_S", HORARIOS_3,"solidas"),
-    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 49, 50, 51], 50, "TQ12_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 28, 29, 30], 50, "TQ7_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 35, 36, 37], 50, "TQ9_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 42, 43, 44], 50, "TQ10_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 49, 50, 51], 50, "TQ11_Au_S", HORARIOS_3,"solidas"),
+    ("Sólidas Saída TQ02, TQ05 e TQ06", [0, 56, 57, 58], 50, "TQ12_Au_S", HORARIOS_3,"solidas"),
     ("Carvão TQ Produção", [0, 8], 50, "TQ2_Au_S", ["12:00"],"solidas"),
 
     # Líquidas
@@ -342,4 +343,10 @@ df_amostras, df_batelada = gerar_consolidados(
     caminho_series=PARQUET_AMOSTRAS_HORARIAS,
     caminho_batelada=PARQUET_AMOSTRAS_BATELADAS
 )
+
+
+# In[5]:
+
+
+df_amostras
 
